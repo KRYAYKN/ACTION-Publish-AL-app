@@ -1,0 +1,57 @@
+name: Publish AL Application
+description: Publish the AL application to a Business Central container.
+
+inputs:
+  CONTAINERNAME:
+    description: The name of the Business Central container.
+    required: true
+  ARTIFACTNAME:
+    description: The name of the artifact.
+    required: true
+  TENANT_ID:
+    description: The tenant ID.
+    required: true
+  ENVIRONMENT:
+    description: The target Business Central environment.
+    required: true
+  REFRESH_TOKEN:
+    description: The refresh token for authentication.
+    required: true
+  ArtifactsDirectory:
+    description: Path to the artifacts directory.
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Publish Application
+      shell: pwsh
+      run: |
+    
+        $ArtifactsDirectory = "${{ inputs.ArtifactsDirectory }}"
+        $containerName = "${{ inputs.CONTAINERNAME }}"
+        $artifactName = "${{ inputs.ARTIFACTNAME }}"
+        $tenantID = "${{ inputs.TENANT_ID }}"
+        $environment = "${{ inputs.ENVIRONMENT }}"
+        $refreshToken = "${{ inputs.REFRESH_TOKEN }}"
+
+        Write-Host "Publishing app to tenant: $tenantID, Environment: $environment"
+
+        # Locate .app file
+        $AppFile = Get-ChildItem -Path $ArtifactsDirectory -Filter "*.app" | Select-Object -First 1
+        if (-not $AppFile) {
+            Write-Host "Error: No .app file found in $ArtifactsDirectory"
+            exit 1
+        }
+
+        Write-Host "App file located: $($AppFile.FullName)"
+
+        # Authentication
+        $authContext = New-BcAuthContext -refreshToken $refreshToken -tenantID $tenantID
+
+        # Publish App
+        Publish-PerTenantExtensionApps `
+            -bcAuthContext $authContext `
+            -environment $environment `
+            -appFiles $AppFile.FullName `
+            -schemaSyncMode Force
