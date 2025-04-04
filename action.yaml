@@ -27,7 +27,6 @@ runs:
     - name: Publish Application
       shell: pwsh
       run: |
-    
         $ArtifactsDirectory = "${{ inputs.ArtifactsDirectory }}"
         $containerName = "${{ inputs.CONTAINERNAME }}"
         $artifactName = "${{ inputs.ARTIFACTNAME }}"
@@ -35,23 +34,29 @@ runs:
         $environment = "${{ inputs.ENVIRONMENT }}"
         $refreshToken = "${{ inputs.REFRESH_TOKEN }}"
 
-        Write-Host "Publishing app to tenant: $tenantID, Environment: $environment"
+        Write-Host "📦 Uygulamalar publish ediliyor - Tenant: $tenantID, Environment: $environment"
 
-        # Locate .app file
-        $AppFile = Get-ChildItem -Path $ArtifactsDirectory -Filter "*.app" | Select-Object -First 1
-        if (-not $AppFile) {
-            Write-Host "Error: No .app file found in $ArtifactsDirectory"
+        $appFiles = Get-ChildItem -Path $ArtifactsDirectory -Filter "*.app"
+
+        if (-not $appFiles -or $appFiles.Count -eq 0) {
+            Write-Host "::error::Hiç .app dosyası bulunamadı: $ArtifactsDirectory"
             exit 1
         }
 
-        Write-Host "App file located: $($AppFile.FullName)"
-
-        # Authentication
+        # Auth context
         $authContext = New-BcAuthContext -refreshToken $refreshToken -tenantID $tenantID
+        if (-not $authContext) {
+            Write-Host "::error::Auth context oluşturulamadı"
+            exit 1
+        }
 
-        # Publish App
-        Publish-PerTenantExtensionApps `
-            -bcAuthContext $authContext `
-            -environment $environment `
-            -appFiles $AppFile.FullName `
-            -schemaSyncMode Force
+        foreach ($appFile in $appFiles) {
+            Write-Host "🔄 Yayınlanıyor: $($appFile.FullName)"
+            Publish-PerTenantExtensionApps `
+                -bcAuthContext $authContext `
+                -environment $environment `
+                -appFiles $appFile.FullName `
+                -schemaSyncMode Force
+        }
+
+        Write-Host "✅ Yayınlama tamamlandı."
