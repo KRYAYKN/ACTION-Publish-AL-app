@@ -53,8 +53,10 @@ runs:
         $testAppName = 'Saint-gobain Test'
         $testAppPublisher = 'pargesoft'
 
+        # Authenticate to BC SaaS
         $authContext = New-BcAuthContext -tenantId '${{ inputs.TENANT_ID }}' -refreshToken '${{ inputs.REFRESH_TOKEN }}'
 
+        # Find the installed test app
         $testApp = Get-BcInstalledExtensions -bcAuthContext $authContext -environment '${{ inputs.ENVIRONMENT }}' |
           Where-Object { $_.DisplayName -eq $testAppName -and $_.Publisher -eq $testAppPublisher }
 
@@ -63,7 +65,8 @@ runs:
           exit 1
         }
 
-        $sharedFolder = "C:\ProgramData\BcContainerHelper\Extensions\${{ inputs.CONTAINERNAME }}\My"
+        # Result file path must be in a shared folder with the container
+        $sharedFolder = "C:\ProgramData\BcContainerHelper\Extensions\${{ inputs.CONTAINERNAME }}\my"
         $testResultsFile = Join-Path $sharedFolder "TestResults.xml"
 
         Run-TestsInBcContainer `
