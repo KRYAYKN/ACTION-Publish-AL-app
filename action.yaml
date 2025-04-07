@@ -1,62 +1,75 @@
-name: Publish AL Application
-description: Publish the AL application to a Business Central container.
+name: AL SaaS Unit Test Runner
+
+description: Runs AL tests on a Business Central SaaS Sandbox environment.
 
 inputs:
   CONTAINERNAME:
-    description: The name of the Business Central container.
-    required: true
-  ARTIFACTNAME:
-    description: The name of the artifact.
+    description: 'Proxy container name (FilesOnly)'
     required: true
   TENANT_ID:
-    description: The tenant ID.
+    description: 'Azure AD Tenant ID'
     required: true
   ENVIRONMENT:
-    description: The target Business Central environment.
+    description: 'Business Central environment name'
     required: true
   REFRESH_TOKEN:
-    description: The refresh token for authentication.
-    required: true
-  ArtifactsDirectory:
-    description: Path to the artifacts directory.
+    description: 'Refresh token for authentication'
     required: true
 
 runs:
-  using: "composite"
+  using: composite
   steps:
-    - name: Publish Application
+    - name: Install BcContainerHelper
       shell: pwsh
       run: |
-        $ArtifactsDirectory = "${{ inputs.ArtifactsDirectory }}"
-        $containerName = "${{ inputs.CONTAINERNAME }}"
-        $artifactName = "${{ inputs.ARTIFACTNAME }}"
-        $tenantID = "${{ inputs.TENANT_ID }}"
-        $environment = "${{ inputs.ENVIRONMENT }}"
-        $refreshToken = "${{ inputs.REFRESH_TOKEN }}"
+        Install-Module BcContainerHelper -Force -AllowClobber -SkipPublisherCheck
+        Import-Module BcContainerHelper
 
-        Write-Host "📦 Uygulamalar publish ediliyor - Tenant: $tenantID, Environment: $environment"
-
-        $appFiles = Get-ChildItem -Path $ArtifactsDirectory -Filter "*.app"
-
-        if (-not $appFiles -or $appFiles.Count -eq 0) {
-            Write-Host "::error::Hiç .app dosyası bulunamadı: $ArtifactsDirectory"
-            exit 1
+    - name: Create FilesOnly Proxy Container if Needed
+      shell: pwsh
+      run: |
+        $containerName = '${{ inputs.CONTAINERNAME }}'
+        $exists = docker ps -a --format '{{.Names}}' | Where-Object { $_ -eq $containerName }
+        if (-not $exists) {
+          Write-Host "Creating FilesOnly container..."
+          New-BcContainer `
+            -accept_eula `
+            -containerName $containerName `
+            -imageName "mcr.microsoft.com/businesscentral:ltsc2022-filesonly" `
+            -isolation process `
+            -auth NavUserPassword `
+            -updateHosts `
+            -shortcuts None `
+            -includeAL `
+            -doNotCheckHealth `
+            -filesOnly
+        } else {
+          Write-Host "✅ Container '$containerName' already exists."
         }
 
-        # Auth context
-        $authContext = New-BcAuthContext -refreshToken $refreshToken -tenantID $tenantID
-        if (-not $authContext) {
-            Write-Host "::error::Auth context oluşturulamadı"
-            exit 1
+    - name: Run Tests in SaaS Environment
+      shell: pwsh
+      run: |
+        $testAppName = 'Saint-gobain Test'
+        $testAppPublisher = 'pargesoft'
+
+        $authContext = New-BcAuthContext -tenantId '${{ inputs.TENANT_ID }}' -refreshToken '${{ inputs.REFRESH_TOKEN }}'
+
+        $testApp = Get-BcInstalledExtensions -bcAuthContext $authContext -environment '${{ inputs.ENVIRONMENT }}' |
+          Where-Object { $_.DisplayName -eq $testAppName -and $_.Publisher -eq $testAppPublisher }
+
+        if (-not $testApp) {
+          Write-Error "❌ Test app '$testAppName' by publisher '$testAppPublisher' not found in the environment '${{ inputs.ENVIRONMENT }}'"
+          exit 1
         }
 
-        foreach ($appFile in $appFiles) {
-            Write-Host "🔄 Yayınlanıyor: $($appFile.FullName)"
-            Publish-PerTenantExtensionApps `
-                -bcAuthContext $authContext `
-                -environment $environment `
-                -appFiles $appFile.FullName `
-                -schemaSyncMode Force
-        }
+        $sharedPath = Get-BcContainerSharedFolders -containerName '${{ inputs.CONTAINERNAME }}' | Select-Object -First 1
+        $testResultsPath = Join-Path $sharedPath 'TestResults.xml'
 
-        Write-Host "✅ Yayınlama tamamlandı."
+        Run-TestsInBcContainer `
+          -containerName '${{ inputs.CONTAINERNAME }}' `
+          -bcAuthContext $authContext `
+          -environment '${{ inputs.ENVIRONMENT }}' `
+          -extensionId $testApp.Id `
+          -detailed `
+          -XUnitResultFileName $testResultsPath
