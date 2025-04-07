@@ -1,5 +1,4 @@
 name: AL SaaS Unit Test Runner
-
 description: Runs AL tests on a Business Central SaaS Sandbox environment.
 
 inputs:
@@ -25,17 +24,18 @@ runs:
         Install-Module BcContainerHelper -Force -AllowClobber -SkipPublisherCheck
         Import-Module BcContainerHelper
 
-    - name: Create FilesOnly Proxy Container if Needed
+    - name: Create FilesOnly Proxy Container if not exists
       shell: pwsh
       run: |
         $containerName = '${{ inputs.CONTAINERNAME }}'
         $exists = docker ps -a --format '{{.Names}}' | Where-Object { $_ -eq $containerName }
         if (-not $exists) {
           Write-Host "Creating FilesOnly container..."
+          $artifactUrl = Get-BCArtifactUrl -type Sandbox -country w1
           New-BcContainer `
             -accept_eula `
             -containerName $containerName `
-            -imageName "mcr.microsoft.com/businesscentral:ltsc2022-filesonly" `
+            -artifactUrl $artifactUrl `
             -isolation process `
             -auth NavUserPassword `
             -updateHosts `
@@ -63,8 +63,8 @@ runs:
           exit 1
         }
 
-        $sharedPath = Get-BcContainerSharedFolders -containerName '${{ inputs.CONTAINERNAME }}' | Select-Object -First 1
-        $testResultsPath = Join-Path $sharedPath 'TestResults.xml'
+        $sharedFolder = "C:\ProgramData\BcContainerHelper\Extensions\${{ inputs.CONTAINERNAME }}\My"
+        $testResultsFile = Join-Path $sharedFolder "TestResults.xml"
 
         Run-TestsInBcContainer `
           -containerName '${{ inputs.CONTAINERNAME }}' `
@@ -72,4 +72,4 @@ runs:
           -environment '${{ inputs.ENVIRONMENT }}' `
           -extensionId $testApp.Id `
           -detailed `
-          -XUnitResultFileName $testResultsPath
+          -XUnitResultFileName $testResultsFile
