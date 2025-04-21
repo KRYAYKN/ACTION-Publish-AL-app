@@ -54,7 +54,7 @@ runs:
         -clientID $clientID `
         -clientSecret $clientSecret `
         -tenantID $tenantID`
-        -includeDeviceLogin
+        
         if (-not $authContext) {
             Write-Host "::error::Auth context oluşturulamadı"
             exit 1
