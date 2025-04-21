@@ -20,7 +20,12 @@ inputs:
   ArtifactsDirectory:
     description: Path to the artifacts directory.
     required: true
-
+  CLIENT_ID:
+    description: The client ıd for authentication.
+    required: true
+  CLIENT_SECRET:
+    description: The client secret for authentication.
+    required: true  
 runs:
   using: "composite"
   steps:
@@ -33,6 +38,8 @@ runs:
         $tenantID = "${{ inputs.TENANT_ID }}"
         $environment = "${{ inputs.ENVIRONMENT }}"
         $refreshToken = "${{ inputs.REFRESH_TOKEN }}"
+        $clientID = "${{ inputs.CLIENT_ID }}"
+        $clientSecret = "${{ inputs.CLIENT_SECRET }}"
 
         Write-Host "📦 Uygulamalar publish ediliyor - Tenant: $tenantID, Environment: $environment"
 
@@ -43,7 +50,11 @@ runs:
             exit 1
         }
 
-        $authContext = New-BcAuthContext -refreshToken $refreshToken -tenantID $tenantID
+        $authContext = New-BcAuthContext `
+        -clientID $clientID `
+        -clientSecret $clientSecret `
+        -tenantID $tenantID`
+        -includeDeviceLogin
         if (-not $authContext) {
             Write-Host "::error::Auth context oluşturulamadı"
             exit 1
