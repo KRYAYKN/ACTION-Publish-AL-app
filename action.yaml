@@ -53,7 +53,7 @@ runs:
         $authContext = New-BcAuthContext `
         -clientID $clientID `
         -clientSecret $clientSecret `
-        -tenantID $tenantID`
+        -tenantID $tenantID
         
         if (-not $authContext) {
             Write-Host "::error::Auth context oluşturulamadı"
