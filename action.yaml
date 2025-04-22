@@ -16,17 +16,16 @@ inputs:
     required: true
   REFRESH_TOKEN:
     description: The refresh token for authentication.
-    required: false
+    required: true
   ArtifactsDirectory:
     description: Path to the artifacts directory.
     required: true
   CLIENT_ID:
-    description: The client ID for authentication.
-    required: false
+    description: The client ıd for authentication.
+    required: true
   CLIENT_SECRET:
     description: The client secret for authentication.
-    required: false
-
+    required: true  
 runs:
   using: "composite"
   steps:
@@ -51,25 +50,11 @@ runs:
             exit 1
         }
 
-        # 🔐 Kimlik doğrulama yöntemi: refreshToken varsa onu kullan, yoksa clientID/clientSecret
-        if ($refreshToken -and $refreshToken.Length -gt 0) {
-            Write-Host "🔑 Refresh token ile authentication yapılıyor..."
-            $authContext = New-BcAuthContext `
-                -refreshToken $refreshToken `
-                -tenantID $tenantID
-        }
-        elseif ($clientID -and $clientSecret) {
-            Write-Host "🔐 Client credentials ile authentication yapılıyor..."
-            $authContext = New-BcAuthContext `
-                -clientID $clientID `
-                -clientSecret $clientSecret `
-                -tenantID $tenantID
-        }
-        else {
-            Write-Host "::error::Gerekli kimlik bilgileri sağlanmadı. Auth context oluşturulamadı."
-            exit 1
-        }
-
+        $authContext = New-BcAuthContext `
+        -clientID $clientID `
+        -clientSecret $clientSecret `
+        -tenantID $tenantID
+        
         if (-not $authContext) {
             Write-Host "::error::Auth context oluşturulamadı"
             exit 1
