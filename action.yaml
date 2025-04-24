@@ -11,9 +11,15 @@ inputs:
   TENANT_ID:
     description: The tenant ID.
     required: true
-  ENVIRONMENT:
-    description: The target Business Central environment.
+  ENVIRONMENT_UK:
+    description: The target Business Central UK environment.
     required: true
+  ENVIRONMENT_DE:
+    description: The target Business Central UK environment.
+    required: true  
+  ENVIRONMENT:
+    description: The target Business Central UK environment.
+    required: true    
   REFRESH_TOKEN:
     description: The refresh token for authentication.
     required: true
