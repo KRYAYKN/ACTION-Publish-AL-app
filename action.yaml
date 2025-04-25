@@ -1,5 +1,6 @@
 name: Publish AL Application
-description: Publish the AL application to a Business Central container.
+
+description: Publish the **main** AL application to a Business Central SaaS environment.
 
 inputs:
   CONTAINERNAME:
@@ -15,10 +16,10 @@ inputs:
     description: The target Business Central UK environment.
     required: true
   ENVIRONMENT_DE:
-    description: The target Business Central UK environment.
+    description: The target Business Central DE environment.
     required: true  
   ENVIRONMENT:
-    description: The target Business Central UK environment.
+    description: The target Business Central environment.
     required: true    
   REFRESH_TOKEN:
     description: The refresh token for authentication.
@@ -27,7 +28,7 @@ inputs:
     description: Path to the artifacts directory.
     required: true
   CLIENT_ID:
-    description: The client ıd for authentication.
+    description: The client ID for authentication.
     required: true
   CLIENT_SECRET:
     description: The client secret for authentication.
@@ -35,7 +36,7 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Publish Application
+    - name: Publish Main Application
       shell: pwsh
       run: |
         $ArtifactsDirectory = "${{ inputs.ArtifactsDirectory }}"
@@ -47,12 +48,12 @@ runs:
         $clientID = "${{ inputs.CLIENT_ID }}"
         $clientSecret = "${{ inputs.CLIENT_SECRET }}"
 
-        Write-Host "📦 Uygulamalar publish ediliyor - Tenant: $tenantID, Environment: $environment"
+        Write-Host "📦 Yalnızca main app SaaS ortamına publish ediliyor - Tenant: $tenantID, Environment: $environment"
 
-        $appFiles = Get-ChildItem -Path $ArtifactsDirectory -Filter "*.app"
+        $mainApp = Get-ChildItem -Path $ArtifactsDirectory -Filter "SGBC.app" | Select-Object -First 1
 
-        if (-not $appFiles -or $appFiles.Count -eq 0) {
-            Write-Host "::error::Hiç .app dosyası bulunamadı: $ArtifactsDirectory"
+        if (-not $mainApp) {
+            Write-Host "::error::Main app bulunamadı: $ArtifactsDirectory/SGBC.app"
             exit 1
         }
 
@@ -66,13 +67,11 @@ runs:
             exit 1
         }
 
-        foreach ($appFile in $appFiles) {
-            Write-Host "🔄 Yayınlanıyor: $($appFile.FullName)"
-            Publish-PerTenantExtensionApps `
-                -bcAuthContext $authContext `
-                -environment $environment `
-                -appFiles $appFile.FullName `
-                -schemaSyncMode Force
-        }
+        Write-Host "🔄 Yayınlanıyor: $($mainApp.FullName)"
+        Publish-PerTenantExtensionApps `
+            -bcAuthContext $authContext `
+            -environment $environment `
+            -appFiles $mainApp.FullName `
+            -schemaSyncMode Force
 
         Write-Host "✅ Yayınlama tamamlandı."
