@@ -17,10 +17,10 @@ inputs:
     required: true
   ENVIRONMENT_DE:
     description: The target Business Central DE environment.
-    required: true  
+    required: true
   ENVIRONMENT:
     description: The target Business Central environment.
-    required: true    
+    required: true
   REFRESH_TOKEN:
     description: The refresh token for authentication.
     required: true
@@ -80,41 +80,11 @@ runs:
       shell: pwsh
       run: |
         try {
-            function Get-ExtensionFromAppFile {
-                param (
-                    [Parameter(Mandatory = $true)]
-                    [string]$appFile
-                )
-
-                Add-Type -AssemblyName System.IO.Compression
-                $stream = [System.IO.File]::OpenRead($appFile)
-                $zip = New-Object System.IO.Compression.ZipArchive($stream)
-
-                $appJsonEntry = $zip.Entries | Where-Object { $_.FullName -eq 'app.json' }
-                if (-not $appJsonEntry) {
-                    throw "app.json not found inside the app file: $appFile"
-                }
-
-                $reader = New-Object System.IO.StreamReader($appJsonEntry.Open())
-                $appJsonContent = $reader.ReadToEnd()
-                $reader.Close()
-                $zip.Dispose()
-                $stream.Close()
-
-                $appJson = $appJsonContent | ConvertFrom-Json
-                return @{
-                    Name      = $appJson.name
-                    Publisher = $appJson.publisher
-                    Id        = $appJson.id
-                    Version   = $appJson.version
-                }
-            }
-
             $ArtifactsDirectory = "${{ inputs.ArtifactsDirectory }}"
             $appPath = Join-Path $ArtifactsDirectory "SGBC.app"
 
             $branchName = $env:GITHUB_HEAD_REF
-            if (-not $branchName) { 
+            if (-not $branchName) {
               $branchName = $env:GITHUB_REF -replace 'refs/heads/', ''
             }
 
@@ -124,14 +94,14 @@ runs:
                 $jiraTicket = "unknown"
             }
 
-            $appInfo = Get-ExtensionFromAppFile -appFile $appPath
+            $appInfo = Get-AppJsonFromAppFile -appFile $appPath
 
             $publishedAppsInfo = @(
                 @{
-                    name      = $appInfo.Name
-                    publisher = $appInfo.Publisher
-                    id        = $appInfo.Id
-                    version   = $appInfo.Version
+                    name      = $appInfo.name
+                    publisher = $appInfo.publisher
+                    id        = $appInfo.id
+                    version   = $appInfo.version
                 }
             )
 
