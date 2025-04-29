@@ -1,6 +1,6 @@
 name: Publish AL Application
 
-description: Publish the **main** AL application to a Business Central SaaS environment.
+description: Publish the **main** AL application to a Business Central SaaS environment and generate build-artifact.json only for published apps.
 
 inputs:
   CONTAINERNAME:
@@ -42,8 +42,6 @@ runs:
       run: |
         try {
             $ArtifactsDirectory = "${{ inputs.ArtifactsDirectory }}"
-            $containerName = "${{ inputs.CONTAINERNAME }}"
-            $artifactName = "${{ inputs.ARTIFACTNAME }}"
             $tenantID = "${{ inputs.TENANT_ID }}"
             $environment = "${{ inputs.ENVIRONMENT }}"
             $refreshToken = "${{ inputs.REFRESH_TOKEN }}"
@@ -79,10 +77,13 @@ runs:
             exit 1
         }
 
-    - name: Generate build-artifact.json After Publish
+    - name: Generate build-artifact.json for Published App
       shell: pwsh
       run: |
         try {
+            $ArtifactsDirectory = "${{ inputs.ArtifactsDirectory }}"
+            $appPath = Join-Path $ArtifactsDirectory "SGBC.app"
+
             $branchName = $env:GITHUB_HEAD_REF
             if (-not $branchName) { 
               $branchName = $env:GITHUB_REF -replace 'refs/heads/', ''
@@ -94,25 +95,24 @@ runs:
                 $jiraTicket = "unknown"
             }
 
-            $publishedApps = Get-BcEnvironmentPublishedApps `
-                -bcAuthContext (New-BcAuthContext -clientID "${{ inputs.CLIENT_ID }}" -clientSecret "${{ inputs.CLIENT_SECRET }}" -tenantID "${{ inputs.TENANT_ID }}" -environment "${{ inputs.ENVIRONMENT }}") `
-                -environment "${{ inputs.ENVIRONMENT }}"
+            # Extract published app details from .app file
+            $appInfo = Get-ExtensionFromAppFile -appFile $appPath
 
-            $publishedAppsInfo = $publishedApps | ForEach-Object {
-              @{
-                name      = $_.Name
-                publisher = $_.Publisher
-                id        = $_.AppId
-                version   = $_.Version
-              }
-            }
+            $publishedAppsInfo = @(
+                @{
+                    name      = $appInfo.Name
+                    publisher = $appInfo.Publisher
+                    id        = $appInfo.Id
+                    version   = $appInfo.Version
+                }
+            )
 
             $artifact = @{
               Story = $jiraTicket
               PublishedApps = $publishedAppsInfo
             }
 
-            $artifactPath = Join-Path "${{ inputs.ArtifactsDirectory }}" "build-artifact.json"
+            $artifactPath = Join-Path $ArtifactsDirectory "build-artifact.json"
             $artifact | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 -Path $artifactPath
 
             Write-Host "✅ build-artifact.json created at: $artifactPath"
