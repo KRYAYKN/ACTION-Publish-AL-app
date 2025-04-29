@@ -94,7 +94,7 @@ runs:
                 $jiraTicket = "unknown"
             }
 
-            $publishedApps = Get-BcEnvironmentExtensionApps `
+            $publishedApps = Get-BcEnvironmentPublishedApps `
                 -bcAuthContext (New-BcAuthContext -clientID "${{ inputs.CLIENT_ID }}" -clientSecret "${{ inputs.CLIENT_SECRET }}" -tenantID "${{ inputs.TENANT_ID }}") `
                 -environment "${{ inputs.ENVIRONMENT }}"
 
