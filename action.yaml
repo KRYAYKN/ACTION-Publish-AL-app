@@ -86,28 +86,27 @@ runs:
                     [string]$appFile
                 )
 
-                $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName())
-                New-Item -ItemType Directory -Path $tempDir | Out-Null
+                Add-Type -AssemblyName System.IO.Compression
+                $stream = [System.IO.File]::OpenRead($appFile)
+                $zip = New-Object System.IO.Compression.ZipArchive($stream)
 
-                try {
-                    Add-Type -AssemblyName System.IO.Compression.FileSystem
-                    [System.IO.Compression.ZipFile]::ExtractToDirectory($appFile, $tempDir)
-
-                    $appJsonPath = Join-Path $tempDir "app.json"
-                    if (-not (Test-Path $appJsonPath)) {
-                        throw "app.json not found inside the app file: $appFile"
-                    }
-
-                    $appJson = Get-Content $appJsonPath -Raw | ConvertFrom-Json
-                    return @{
-                        Name      = $appJson.name
-                        Publisher = $appJson.publisher
-                        Id        = $appJson.id
-                        Version   = $appJson.version
-                    }
+                $appJsonEntry = $zip.Entries | Where-Object { $_.FullName -eq 'app.json' }
+                if (-not $appJsonEntry) {
+                    throw "app.json not found inside the app file: $appFile"
                 }
-                finally {
-                    Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+
+                $reader = New-Object System.IO.StreamReader($appJsonEntry.Open())
+                $appJsonContent = $reader.ReadToEnd()
+                $reader.Close()
+                $zip.Dispose()
+                $stream.Close()
+
+                $appJson = $appJsonContent | ConvertFrom-Json
+                return @{
+                    Name      = $appJson.name
+                    Publisher = $appJson.publisher
+                    Id        = $appJson.id
+                    Version   = $appJson.version
                 }
             }
 
