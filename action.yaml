@@ -44,7 +44,6 @@ runs:
             $ArtifactsDirectory = "${{ inputs.ArtifactsDirectory }}"
             $tenantID = "${{ inputs.TENANT_ID }}"
             $environment = "${{ inputs.ENVIRONMENT }}"
-            $refreshToken = "${{ inputs.REFRESH_TOKEN }}"
             $clientID = "${{ inputs.CLIENT_ID }}"
             $clientSecret = "${{ inputs.CLIENT_SECRET }}"
 
@@ -59,7 +58,7 @@ runs:
                 -clientID $clientID `
                 -clientSecret $clientSecret `
                 -tenantID $tenantID
-            
+
             if (-not $authContext) {
                 throw "Failed to create authentication context."
             }
@@ -81,6 +80,37 @@ runs:
       shell: pwsh
       run: |
         try {
+            function Get-ExtensionFromAppFile {
+                param (
+                    [Parameter(Mandatory = $true)]
+                    [string]$appFile
+                )
+
+                $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName())
+                New-Item -ItemType Directory -Path $tempDir | Out-Null
+
+                try {
+                    Add-Type -AssemblyName System.IO.Compression.FileSystem
+                    [System.IO.Compression.ZipFile]::ExtractToDirectory($appFile, $tempDir)
+
+                    $appJsonPath = Join-Path $tempDir "app.json"
+                    if (-not (Test-Path $appJsonPath)) {
+                        throw "app.json not found inside the app file: $appFile"
+                    }
+
+                    $appJson = Get-Content $appJsonPath -Raw | ConvertFrom-Json
+                    return @{
+                        Name      = $appJson.name
+                        Publisher = $appJson.publisher
+                        Id        = $appJson.id
+                        Version   = $appJson.version
+                    }
+                }
+                finally {
+                    Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+                }
+            }
+
             $ArtifactsDirectory = "${{ inputs.ArtifactsDirectory }}"
             $appPath = Join-Path $ArtifactsDirectory "SGBC.app"
 
@@ -95,7 +125,6 @@ runs:
                 $jiraTicket = "unknown"
             }
 
-            # Extract published app details from .app file
             $appInfo = Get-ExtensionFromAppFile -appFile $appPath
 
             $publishedAppsInfo = @(
