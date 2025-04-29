@@ -33,6 +33,7 @@ inputs:
   CLIENT_SECRET:
     description: The client secret for authentication.
     required: true  
+
 runs:
   using: "composite"
   steps:
@@ -75,3 +76,46 @@ runs:
             -schemaSyncMode Force
 
         Write-Host "✅ Yayınlama tamamlandı."
+
+    - name: Generate build-artifact.json After Publish
+      shell: pwsh
+      run: |
+        $branchName = $env:GITHUB_HEAD_REF
+        if (-not $branchName) { 
+          $branchName = $env:GITHUB_REF -replace 'refs/heads/', ''
+        }
+
+        if ($branchName -match '^feature\/(?<ticket>[A-Z]+-\d+)') {
+            $jiraTicket = $Matches.ticket
+        } else {
+            $jiraTicket = "unknown"
+        }
+
+        $publishedApps = Get-BcEnvironmentExtensionApps `
+            -bcAuthContext (New-BcAuthContext -clientID "${{ inputs.CLIENT_ID }}" -clientSecret "${{ inputs.CLIENT_SECRET }}" -tenantID "${{ inputs.TENANT_ID }}") `
+            -environment "${{ inputs.ENVIRONMENT }}"
+
+        $publishedAppsInfo = $publishedApps | ForEach-Object {
+          @{
+            name      = $_.Name
+            publisher = $_.Publisher
+            id        = $_.AppId
+            version   = $_.Version
+          }
+        }
+
+        $artifact = @{
+          Story = $jiraTicket
+          PublishedApps = $publishedAppsInfo
+        }
+
+        $artifactPath = Join-Path "${{ inputs.ArtifactsDirectory }}" "build-artifact.json"
+        $artifact | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 -Path $artifactPath
+
+        Write-Host "✅ build-artifact.json created at: $artifactPath"
+
+    - name: Upload build-artifact.json
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-metadata
+        path: ${{ inputs.ArtifactsDirectory }}/build-artifact.json
