@@ -3,36 +3,7 @@ name: Publish AL Application
 description: Publish the **main** AL application to a Business Central SaaS environment.
 
 inputs:
-  CONTAINERNAME:
-    description: 'The name of the Business Central container.'
-    required: true
-  ARTIFACTNAME:
-    description: The name of the artifact.
-    required: true
-  TENANT_ID:
-    description: The tenant ID.
-    required: true
-  ENVIRONMENT_UK:
-    description: The target Business Central UK environment.
-    required: true
-  ENVIRONMENT_DE:
-    description: The target Business Central DE environment.
-    required: true  
-  ENVIRONMENT:
-    description: The target Business Central environment.
-    required: true    
-  REFRESH_TOKEN:
-    description: The refresh token for authentication.
-    required: true
-  ArtifactsDirectory:
-    description: Path to the artifacts directory.
-    required: true
-  CLIENT_ID:
-    description: The client ID for authentication.
-    required: true
-  CLIENT_SECRET:
-    description: The client secret for authentication.
-    required: true  
+  # inputs aynı
 
 runs:
   using: "composite"
@@ -40,79 +11,87 @@ runs:
     - name: Publish Main Application
       shell: pwsh
       run: |
-        $ArtifactsDirectory = "${{ inputs.ArtifactsDirectory }}"
-        $containerName = "${{ inputs.CONTAINERNAME }}"
-        $artifactName = "${{ inputs.ARTIFACTNAME }}"
-        $tenantID = "${{ inputs.TENANT_ID }}"
-        $environment = "${{ inputs.ENVIRONMENT }}"
-        $refreshToken = "${{ inputs.REFRESH_TOKEN }}"
-        $clientID = "${{ inputs.CLIENT_ID }}"
-        $clientSecret = "${{ inputs.CLIENT_SECRET }}"
+        try {
+            $ArtifactsDirectory = "${{ inputs.ArtifactsDirectory }}"
+            $containerName = "${{ inputs.CONTAINERNAME }}"
+            $artifactName = "${{ inputs.ARTIFACTNAME }}"
+            $tenantID = "${{ inputs.TENANT_ID }}"
+            $environment = "${{ inputs.ENVIRONMENT }}"
+            $refreshToken = "${{ inputs.REFRESH_TOKEN }}"
+            $clientID = "${{ inputs.CLIENT_ID }}"
+            $clientSecret = "${{ inputs.CLIENT_SECRET }}"
 
-        Write-Host "📦 Yalnızca main app SaaS ortamına publish ediliyor - Tenant: $tenantID, Environment: $environment"
+            Write-Host "📦 Publishing Main app to SaaS environment - Tenant: $tenantID, Environment: $environment"
 
-        $mainApp = Get-ChildItem -Path $ArtifactsDirectory -Filter "SGBC.app" | Select-Object -First 1
+            $mainApp = Get-ChildItem -Path $ArtifactsDirectory -Filter "SGBC.app" | Select-Object -First 1
+            if (-not $mainApp) {
+                throw "Main App (.app) file not found in artifacts directory!"
+            }
 
-        if (-not $mainApp) {
-            Write-Host "::error::Main app bulunamadı: $ArtifactsDirectory/SGBC.app"
+            $authContext = New-BcAuthContext `
+                -clientID $clientID `
+                -clientSecret $clientSecret `
+                -tenantID $tenantID
+            
+            if (-not $authContext) {
+                throw "Failed to create authentication context."
+            }
+
+            Publish-PerTenantExtensionApps `
+                -bcAuthContext $authContext `
+                -environment $environment `
+                -appFiles $mainApp.FullName `
+                -schemaSyncMode Force
+
+            Write-Host "✅ Main App published to SaaS successfully."
+        }
+        catch {
+            Write-Error "❌ Error during SaaS Publish: $_"
             exit 1
         }
-
-        $authContext = New-BcAuthContext `
-        -clientID $clientID `
-        -clientSecret $clientSecret `
-        -tenantID $tenantID
-        
-        if (-not $authContext) {
-            Write-Host "::error::Auth context oluşturulamadı"
-            exit 1
-        }
-
-        Write-Host "🔄 Yayınlanıyor: $($mainApp.FullName)"
-        Publish-PerTenantExtensionApps `
-            -bcAuthContext $authContext `
-            -environment $environment `
-            -appFiles $mainApp.FullName `
-            -schemaSyncMode Force
-
-        Write-Host "✅ Yayınlama tamamlandı."
 
     - name: Generate build-artifact.json After Publish
       shell: pwsh
       run: |
-        $branchName = $env:GITHUB_HEAD_REF
-        if (-not $branchName) { 
-          $branchName = $env:GITHUB_REF -replace 'refs/heads/', ''
+        try {
+            $branchName = $env:GITHUB_HEAD_REF
+            if (-not $branchName) { 
+              $branchName = $env:GITHUB_REF -replace 'refs/heads/', ''
+            }
+
+            if ($branchName -match '^feature\/(?<ticket>[A-Z]+-\d+)') {
+                $jiraTicket = $Matches.ticket
+            } else {
+                $jiraTicket = "unknown"
+            }
+
+            $publishedApps = Get-BcEnvironmentExtensionApps `
+                -bcAuthContext (New-BcAuthContext -clientID "${{ inputs.CLIENT_ID }}" -clientSecret "${{ inputs.CLIENT_SECRET }}" -tenantID "${{ inputs.TENANT_ID }}") `
+                -environment "${{ inputs.ENVIRONMENT }}"
+
+            $publishedAppsInfo = $publishedApps | ForEach-Object {
+              @{
+                name      = $_.Name
+                publisher = $_.Publisher
+                id        = $_.AppId
+                version   = $_.Version
+              }
+            }
+
+            $artifact = @{
+              Story = $jiraTicket
+              PublishedApps = $publishedAppsInfo
+            }
+
+            $artifactPath = Join-Path "${{ inputs.ArtifactsDirectory }}" "build-artifact.json"
+            $artifact | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 -Path $artifactPath
+
+            Write-Host "✅ build-artifact.json created at: $artifactPath"
         }
-
-        if ($branchName -match '^feature\/(?<ticket>[A-Z]+-\d+)') {
-            $jiraTicket = $Matches.ticket
-        } else {
-            $jiraTicket = "unknown"
+        catch {
+            Write-Error "❌ Error during build-artifact.json generation: $_"
+            exit 1
         }
-
-        $publishedApps = Get-BcEnvironmentExtensionApps `
-            -bcAuthContext (New-BcAuthContext -clientID "${{ inputs.CLIENT_ID }}" -clientSecret "${{ inputs.CLIENT_SECRET }}" -tenantID "${{ inputs.TENANT_ID }}") `
-            -environment "${{ inputs.ENVIRONMENT }}"
-
-        $publishedAppsInfo = $publishedApps | ForEach-Object {
-          @{
-            name      = $_.Name
-            publisher = $_.Publisher
-            id        = $_.AppId
-            version   = $_.Version
-          }
-        }
-
-        $artifact = @{
-          Story = $jiraTicket
-          PublishedApps = $publishedAppsInfo
-        }
-
-        $artifactPath = Join-Path "${{ inputs.ArtifactsDirectory }}" "build-artifact.json"
-        $artifact | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 -Path $artifactPath
-
-        Write-Host "✅ build-artifact.json created at: $artifactPath"
 
     - name: Upload build-artifact.json
       uses: actions/upload-artifact@v4
