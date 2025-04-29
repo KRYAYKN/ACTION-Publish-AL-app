@@ -1,6 +1,6 @@
 name: Publish AL Application
 
-description: Publish the **main** AL application to a Business Central SaaS environment and generate build-artifact.json only for published apps.
+description: Publish the **main** AL application to a Business Central SaaS environment and generate build-artifact.json only for the published app.
 
 inputs:
   CONTAINERNAME:
@@ -85,7 +85,7 @@ runs:
 
             $branchName = $env:GITHUB_HEAD_REF
             if (-not $branchName) {
-              $branchName = $env:GITHUB_REF -replace 'refs/heads/', ''
+              $branchName = $env:GITHUB_REF -replace '^refs/heads/', ''
             }
 
             if ($branchName -match '^feature\/(?<ticket>[A-Z]+-\d+)') {
@@ -94,7 +94,12 @@ runs:
                 $jiraTicket = "unknown"
             }
 
+            # Get app.json content from .app file
             $appInfo = Get-AppJsonFromAppFile -appFile $appPath
+
+            if (-not $appInfo) {
+                throw "Failed to extract app.json from $appPath"
+            }
 
             $publishedAppsInfo = @(
                 @{
