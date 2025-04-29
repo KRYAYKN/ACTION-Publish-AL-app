@@ -3,7 +3,36 @@ name: Publish AL Application
 description: Publish the **main** AL application to a Business Central SaaS environment.
 
 inputs:
-  # inputs aynı
+  CONTAINERNAME:
+    description: 'The name of the Business Central container.'
+    required: true
+  ARTIFACTNAME:
+    description: The name of the artifact.
+    required: true
+  TENANT_ID:
+    description: The tenant ID.
+    required: true
+  ENVIRONMENT_UK:
+    description: The target Business Central UK environment.
+    required: true
+  ENVIRONMENT_DE:
+    description: The target Business Central DE environment.
+    required: true  
+  ENVIRONMENT:
+    description: The target Business Central environment.
+    required: true    
+  REFRESH_TOKEN:
+    description: The refresh token for authentication.
+    required: true
+  ArtifactsDirectory:
+    description: Path to the artifacts directory.
+    required: true
+  CLIENT_ID:
+    description: The client ID for authentication.
+    required: true
+  CLIENT_SECRET:
+    description: The client secret for authentication.
+    required: true
 
 runs:
   using: "composite"
