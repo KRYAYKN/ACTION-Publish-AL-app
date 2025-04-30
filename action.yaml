@@ -83,15 +83,30 @@ runs:
             $ArtifactsDirectory = "${{ inputs.ArtifactsDirectory }}"
             $appPath = Join-Path $ArtifactsDirectory "SGBC.app"
 
-            $branchName = if ($env:GITHUB_HEAD_REF) { $env:GITHUB_HEAD_REF } else { $env:GITHUB_REF -replace '^refs/heads/', '' }
+            # Detect branch name based on event type
+            $eventName = $env:GITHUB_EVENT_NAME
+            $branchName = ""
+
+            if ($eventName -eq "pull_request") {
+                $eventJson = Get-Content $env:GITHUB_EVENT_PATH | ConvertFrom-Json
+                $branchName = $eventJson.pull_request.head.ref
+            } elseif ($env:GITHUB_HEAD_REF) {
+                $branchName = $env:GITHUB_HEAD_REF
+            } else {
+                $branchName = $env:GITHUB_REF -replace '^refs/heads/', ''
+            }
+
             Write-Host "🌿 Detected branch: $branchName"
 
-            if ($branchName -match 'feature[/-](?<ticket>[A-Z]+-\d+)' ) {
+            if ($branchName -match '(?i)(?:feature|feat)[/-](?<ticket>[A-Z]+-\d+)' ) {
                 $jiraTicket = $Matches.ticket
+                Write-Host "✅ Extracted Jira Ticket: $jiraTicket"
             } else {
+                Write-Host "⚠️ Jira ticket not detected from branch name."
                 $jiraTicket = "unknown"
             }
 
+            # Extract app.json from .app file
             $appInfo = Get-AppJsonFromAppFile -appFile $appPath
 
             if (-not $appInfo) {
@@ -121,6 +136,7 @@ runs:
             Write-Error "❌ Error during build-artifact.json generation: $_"
             exit 1
         }
+
 
     - name: Upload build-artifact.json
       uses: actions/upload-artifact@v4
